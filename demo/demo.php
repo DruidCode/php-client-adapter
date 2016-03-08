@@ -1,67 +1,72 @@
 <?php
 require_once __DIR__ . '/vendor/autoload.php';
 
-$config = array(
-    'compilePath' => __DIR__ . '/var/ckcr_compiled/',
-    'preDefined' => array(
-        'user' => 'aarr|include:name;id{
-            name: str,
-            id: int,
-        }',
-        'show' => 'aarr|include:id;url{
-            id: int,
-            url: str,
-        }',
-    ),
-);
+############################# Env本身定义了一个抽象概念, 需要根据不同的运营环境定义不同的实现. 比如, 对于客户端App
+class AppEnv extends \ClientAdapter\Env {
+    public $osName;
+    public $appVersion;
+}
 
-$data = array(
-    'user' => array(
-        'id'   => 1,
-        'name' => 'goosman-lei',
-        'age'  => 30,
-    ),
-    'shows' => array(
-        array(
-            'id' => 1,
-            'url' => 'http://img.oneniceapp.com/1.jpg',
-        ),
-        array(
-            'id' => 2,
-            'url' => 'http://img.oneniceapp.com/2.jpg',
-        ),
-    ),
-);
+############################ 客户端适配器, 本身提供了一种规则校验, 下面以我们的Feature应用场景示例
+class Feature {
+    protected static $features = array();
 
-
-$ckcrHandler = new \Ckcr\Handler($config);
-
-
-
-echo '==================直接的应用' . chr(10);
-$ckcr = 'aarr{
-    user: aarr|include:name;id{
-        name: str,
-        id: int,
-    },
-    shows: iarr{
-        *: aarr|include:url{
-            url: str,
+    public static function init($featuresConfig) {
+        foreach ($featuresConfig as $featureName => $envDesc) {
+            if (\ClientAdapter\Env::checkEnv($envDesc)) {
+                self::$features[$featureName] = TRUE;
+            }
         }
     }
-}';
-$ckcrProxy = $ckcrHandler->getProxy($ckcr);
-$ckcrProxy->ckcr($data);
-echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . chr(10);
 
-
-echo '==================带预处理的例子' . chr(10);
-$ckcr = 'aarr{
-    user: {@user@},
-    shows: iarr{
-        *: {@show@},
+    public static function isEnable($featureName) {
+        return array_key_exists($featureName, self::$features) && self::$features[$featureName] === TRUE;
     }
-}';
-$ckcrProxy = $ckcrHandler->getProxy($ckcr);
-$ckcrProxy->ckcr($data);
-echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . chr(10);
+}
+
+
+########################## OK. 下面是应用中使用Feature的应用场景
+
+echo "app start\n\n";
+
+echo "prePare Env\n\n";
+$appEnv = new \AppEnv();
+$appEnv->sessUid    = rand(0, 10000);
+$appEnv->clientIp   = long2ip(rand(0, pow(2, 32)));
+$appEnv->latitude   = rand(0, 1000000) / 1000;
+$appEnv->longitude  = rand(0, 1000000) / 1000;
+$appEnv->osName     = rand(0, 1) ? 'ios' : 'android';
+$appEnv->appVersion = rand(0, 100) / 10;
+
+\ClientAdapter\Env::setCurrEnv($appEnv);
+
+echo "Features init\n\n";
+$featuresConfig = array(
+    'support-hail' => array( # ios 5.2及以上版本; android 5.3及以上版本. 支持打招呼功能
+        array(
+            'osName eq ios',
+            'appVersion v>= 5.2',
+        ),
+        array(
+            'osName eq android',
+            'appVersion v>= 5.3',
+        ),
+    ),
+    'support-emotion' => array( # ios 5.3及以上版本, 10%小流量用户开启表情功能
+        'osName eq ios',
+        'appVersion v>= 5.3',
+        'sessUid <=% 100:10',
+    ),
+);
+Feature::init($featuresConfig);
+
+echo "Business code is\n";
+if (Feature::isEnable('support-hail')) {
+    echo "\tHere is hail code\n";
+}
+if (Feature::isEnable('support-emotion')) {
+    echo "\tHere is emotion code\n";
+}
+
+echo "\nAppEnv is:\n";
+echo json_encode((array)$appEnv, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . chr(10);
