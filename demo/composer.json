@@ -1,0 +1,18 @@
+{
+    "name": "goosman/php-client-adapter-demo",
+    "description": "demo for client adapter",
+    "version": "0.0.1-dev",
+    "type": "project",
+    "require": {
+        "goosman/php-client-adapter": "*" 
+    },  
+    "repositories": [
+        {   
+            "packagist": false
+        },  
+        {   
+            "type": "vcs",
+            "url": "git@github.com:goosman-lei/php-client-adapter.git"
+        }   
+    ]  
+}
